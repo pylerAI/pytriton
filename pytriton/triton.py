@@ -68,7 +68,9 @@ LOGGER = logging.getLogger(__name__)
 TRITONSERVER_DIST_DIR = get_root_module_path() / "tritonserver"
 MONITORING_PERIOD_SEC = 10.0
 WAIT_FORM_MODEL_TIMEOUT_S = 60.0
-INITIAL_BACKEND_SHM_SIZE = 4194304  # 4MB, Python Backend default is 64MB, but is automatically increased
+INITIAL_BACKEND_SHM_SIZE = (
+    4194304  # 4MB, Python Backend default is 64MB, but is automatically increased
+)
 GROWTH_BACKEND_SHM_SIZE = 1048576  # 1MB, Python Backend default is 64MB
 
 MODEL_URL = "/v2/models/{model_name}"
@@ -242,9 +244,17 @@ class TritonConfig:
             TritonConfig class instantiated from environment variables.
         """
         prefix = "PYTRITON_TRITON_CONFIG_"
-        config = {name[len(prefix) :].lower(): value for name, value in os.environ.items() if name.startswith(prefix)}
-        fields: Dict[str, dataclasses.Field] = {field.name: field for field in dataclasses.fields(cls)}
-        unknown_config_parameters = {name: value for name, value in config.items() if name not in fields}
+        config = {
+            name[len(prefix) :].lower(): value
+            for name, value in os.environ.items()
+            if name.startswith(prefix)
+        }
+        fields: Dict[str, dataclasses.Field] = {
+            field.name: field for field in dataclasses.fields(cls)
+        }
+        unknown_config_parameters = {
+            name: value for name, value in config.items() if name not in fields
+        }
         for name, value in unknown_config_parameters.items():
             LOGGER.warning(
                 f"Ignoring {name}={value} as could not find matching config field. "
@@ -259,7 +269,9 @@ class TritonConfig:
             return field_type(_value)
 
         config_with_casted_values = {
-            name: _cast_value(fields[name], value) for name, value in config.items() if name in fields
+            name: _cast_value(fields[name], value)
+            for name, value in config.items()
+            if name in fields
         }
         return cls(**config_with_casted_values)
 
@@ -290,7 +302,9 @@ class _LogLevelChecker:
         if self._log_settings is None and not skip_update:
             condition = threading.Condition(threading.RLock())
             with condition:
-                wait_for_server_ready(self._client._general_client, timeout_s=120, condition=condition)
+                wait_for_server_ready(
+                    self._client._general_client, timeout_s=120, condition=condition
+                )
             self._log_settings = self._client._general_client.get_log_settings()
 
         if self._log_settings is not None:
@@ -300,7 +314,9 @@ class _LogLevelChecker:
                 log_settings = {key: value.string_param for key, value in log_settings.items()}
             else:  # http client
                 log_settings = {key: str(value) for key, value in log_settings.items()}
-            log_verbose_level = int(log_settings.get("log_verbose_level", 0)) if log_settings is not None else 0
+            log_verbose_level = (
+                int(log_settings.get("log_verbose_level", 0)) if log_settings is not None else 0
+            )
             if log_verbose_level > 0:
                 LOGGER.warning(
                     f"Triton Inference Server is running with enabled verbose logs (log_verbose_level={log_verbose_level}). "
@@ -312,7 +328,12 @@ class Triton:
     """Triton Inference Server for Python models."""
 
     def __init__(
-        self, *, config: Optional[TritonConfig] = None, workspace: Union[Workspace, str, pathlib.Path, None] = None
+        self,
+        *,
+        config: Optional[TritonConfig] = None,
+        python_backend_config: PythonBackendConfig = PythonBackendConfig(),
+        triton_inference_server_dir: pathlib.Path = TRITONSERVER_DIST_DIR,
+        workspace: Union[Workspace, str, pathlib.Path, None] = None,
     ):
         """Initialize Triton Inference Server context for starting server and loading models.
 
@@ -341,10 +362,14 @@ class Triton:
         self._config = TritonConfig(**config_dict)
         self._workspace = workspace if isinstance(workspace, Workspace) else Workspace(workspace)
 
-        self._model_repository = TritonModelRepository(path=self._config.model_repository, workspace=self._workspace)
+        self._model_repository = TritonModelRepository(
+            path=self._config.model_repository, workspace=self._workspace
+        )
         self._model_manager = ModelManager(self._model_repository)
         self._triton_context = TritonContext()
         self._tensor_store = TensorStore(self._workspace.path / "data_store.sock")
+        self._python_backend_config = python_backend_config
+        self._triton_inference_sever_dir = triton_inference_server_dir
 
         self._triton_server = None
         self._triton_server_config = None
@@ -481,7 +506,9 @@ class Triton:
 
         self._model_manager.add_model(model)
 
-    def _on_model_event(self, model: Model, event: ModelEvent, context: typing.Optional[typing.Any] = None):
+    def _on_model_event(
+        self, model: Model, event: ModelEvent, context: typing.Optional[typing.Any] = None
+    ):
         LOGGER.info(f"Received {event} from {model}; context={context}")
 
         if event in [ModelEvent.RUNTIME_TERMINATING, ModelEvent.RUNTIME_TERMINATED]:
@@ -506,7 +533,9 @@ class Triton:
         try:
             for model in self._model_manager.models:
                 with ModelClient(
-                    url=server_url, model_name=model.model_name, model_version=str(model.model_version)
+                    url=server_url,
+                    model_name=model.model_name,
+                    model_version=str(model.model_version),
                 ) as client:
                     # This waits for only tritonserver and lightweight proxy backend to be ready
                     # timeout should be short as model is loaded before execution of Triton.start() method
@@ -518,10 +547,18 @@ class Triton:
             )
 
         for model in self._model_manager.models:
-            LOGGER.info(f"Infer function available as model: `{MODEL_URL.format(model_name=model.model_name)}`")
-            LOGGER.info(f"  Status:         `GET  {MODEL_READY_URL.format(model_name=model.model_name)}`")
-            LOGGER.info(f"  Model config:   `GET  {MODEL_CONFIG_URL.format(model_name=model.model_name)}`")
-            LOGGER.info(f"  Inference:      `POST {MODEL_INFER_URL.format(model_name=model.model_name)}`")
+            LOGGER.info(
+                f"Infer function available as model: `{MODEL_URL.format(model_name=model.model_name)}`"
+            )
+            LOGGER.info(
+                f"  Status:         `GET  {MODEL_READY_URL.format(model_name=model.model_name)}`"
+            )
+            LOGGER.info(
+                f"  Model config:   `GET  {MODEL_CONFIG_URL.format(model_name=model.model_name)}`"
+            )
+            LOGGER.info(
+                f"  Inference:      `POST {MODEL_INFER_URL.format(model_name=model.model_name)}`"
+            )
 
         LOGGER.info(
             """Read more about configuring and serving models in """
@@ -548,7 +585,6 @@ class Triton:
         self._triton_server_config = TritonServerConfig()
         config_data = self._config.to_dict()
 
-        self._python_backend_config = PythonBackendConfig()
         python_backend_config_data = {
             "shm-region-prefix-name": self._shm_prefix(),
             "shm-default-byte-size": INITIAL_BACKEND_SHM_SIZE,
@@ -558,6 +594,11 @@ class Triton:
             if name not in PythonBackendConfig.allowed_keys() or value is None:
                 continue
 
+            if name in self._python_backend_config:
+                continue
+
+            if isinstance(value, pathlib.Path):
+                value = value.as_posix()
             self._python_backend_config[name] = value
 
         for name, value in config_data.items():
@@ -566,14 +607,20 @@ class Triton:
 
             self._triton_server_config[name] = value
 
-        triton_inference_server_path = self._prepare_triton_inference_server(workspace=self._workspace)
+        triton_inference_server_path = self._prepare_triton_inference_server(
+            triton_inference_server_dir=self._triton_inference_sever_dir
+        )
 
         self._triton_server_config["backend_config"] = self._python_backend_config.to_list_args()
 
         self._triton_server_config["model_repository"] = self._model_repository.path.as_posix()
-        self._triton_server_config["backend_directory"] = (triton_inference_server_path / "backends").as_posix()
+        self._triton_server_config["backend_directory"] = (
+            triton_inference_server_path / "backends"
+        ).as_posix()
         if "cache_directory" not in self._triton_server_config:
-            self._triton_server_config["cache_directory"] = (triton_inference_server_path / "caches").as_posix()
+            self._triton_server_config["cache_directory"] = (
+                triton_inference_server_path / "caches"
+            ).as_posix()
 
         self._triton_server = TritonServer(
             path=(triton_inference_server_path / "bin" / "tritonserver").as_posix(),
@@ -588,7 +635,9 @@ class Triton:
         )
         self._log_level_checker = _LogLevelChecker(url)
 
-    def _prepare_triton_inference_server(self, workspace: Workspace) -> pathlib.Path:
+    def _prepare_triton_inference_server(
+        self, triton_inference_server_dir: pathlib.Path
+    ) -> pathlib.Path:
         """Prepare binaries and libraries of Triton Inference Server for execution.
 
         Args:
@@ -601,18 +650,24 @@ class Triton:
 
         LOGGER.debug("Preparing Triton Inference Server binaries and libs for execution.")
         shutil.copytree(
-            TRITONSERVER_DIST_DIR,
+            triton_inference_server_dir,
             triton_inference_server_path,
             ignore=shutil.ignore_patterns("python_backend_stubs", "triton_python_backend_stub"),
         )
-        LOGGER.debug(f"Triton Inference Server binaries copied to {triton_inference_server_path} without stubs.")
+        LOGGER.debug(
+            f"Triton Inference Server binaries copied to {triton_inference_server_path} without stubs."
+        )
 
         major = sys.version_info[0]
         minor = sys.version_info[1]
         version = f"{major}.{minor}"
 
-        src_stub_path = get_stub_path(version)
-        dst_stub_path = triton_inference_server_path / "backends" / "python" / "triton_python_backend_stub"
+        src_stub_path = (
+            triton_inference_server_dir / "backends" / "python" / "triton_python_backend_stub"
+        )
+        dst_stub_path = (
+            triton_inference_server_path / "backends" / "python" / "triton_python_backend_stub"
+        )
 
         LOGGER.debug(f"Copying stub for version {version} from {src_stub_path} to {dst_stub_path}")
         shutil.copy(src_stub_path, dst_stub_path)
