@@ -607,9 +607,10 @@ class Triton:
 
             self._triton_server_config[name] = value
 
-        triton_inference_server_path = self._prepare_triton_inference_server(
-            triton_inference_server_dir=self._triton_inference_sever_dir
-        )
+        # triton_inference_server_path = self._prepare_triton_inference_server(
+        #     triton_inference_server_dir=self._triton_inference_sever_dir
+        # )
+        triton_inference_server_path = self._triton_inference_sever_dir
 
         self._triton_server_config["backend_config"] = self._python_backend_config.to_list_args()
 
@@ -646,17 +647,17 @@ class Triton:
         Return:
             Path where Triton binaries are ready for execution
         """
-        triton_inference_server_path = workspace.path / "tritonserver"
+        triton_inference_server_path = triton_inference_server_dir
 
-        LOGGER.debug("Preparing Triton Inference Server binaries and libs for execution.")
-        shutil.copytree(
-            triton_inference_server_dir,
-            triton_inference_server_path,
-            ignore=shutil.ignore_patterns("python_backend_stubs", "triton_python_backend_stub"),
-        )
-        LOGGER.debug(
-            f"Triton Inference Server binaries copied to {triton_inference_server_path} without stubs."
-        )
+        # LOGGER.debug("Preparing Triton Inference Server binaries and libs for execution.")
+        # shutil.copytree(
+        #     triton_inference_server_dir,
+        #     triton_inference_server_path,
+        #     ignore=shutil.ignore_patterns("python_backend_stubs", "triton_python_backend_stub"),
+        # )
+        # LOGGER.debug(
+        #     f"Triton Inference Server binaries copied to {triton_inference_server_path} without stubs."
+        # )
 
         major = sys.version_info[0]
         minor = sys.version_info[1]
