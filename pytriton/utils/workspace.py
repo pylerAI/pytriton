@@ -45,7 +45,7 @@ class Workspace:
             self._tmp_dir = None
             self._workspace_path = pathlib.Path(workspace_path).resolve()
             LOGGER.debug(f"Workspace path {self._workspace_path}")
-            self._workspace_path.mkdir(parents=True)
+            self._workspace_path.mkdir(parents=True, exist_ok=True)
 
     @property
     def path(self) -> pathlib.Path:
